@@ -1,107 +1,123 @@
-# CelerVoice - Model AI Suara Sendiri (Lightweight Neural Voice)
+# 🎙️ CelerVoice - Model AI Suara Buatan Sendiri (Lightweight Neural Voice)
 
-Proyek ini adalah implementasi **Model AI Suara (Neural Speech Synthesis) 100% Buatan Sendiri**, bukan mengambil model orang lain (bukan VITS, Bark, XTTS, atau RVC pra-latih pihak ketiga).
+[![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sunandar3221/MyVoice/blob/master/Train_CelerVoice_Colab.ipynb)
 
-Arsitektur ini dirancang khusus dari nol menggunakan **PyTorch & Python** agar **ringan, berkualitas bagus, serta dapat dilatih (train) dan dijalankan (inference) secara lancar di laptop berprosesor Intel Celeron** (hanya 2 thread CPU, tanpa GPU).
+Proyek ini adalah implementasi **Model AI Suara (Neural Speech Synthesis) 100% Buatan Sendiri**, bukan mengambil atau meminjam model orang lain (bukan VITS, Bark, XTTS, atau RVC pra-latih pihak ketiga).
 
----
-
-##  Mengapa Model Ini Sangat Cocok untuk Laptop Celeron?
-
-1. **Ukuran Model Sangat Ringkas (~3.4 MB)**:
-   - Total parameter hanya **~890.000 parameter** (dibandingkan model umum seperti Bark/XTTS yang ratusan juta sampai miliaran parameter).
-   - Penggunaan RAM saat training hanya **< 250 MB**, sangat aman untuk laptop dengan RAM 4 GB.
-2. **Guided Attention Mechanism**:
-   - Model seq2seq biasa butuh ratusan jam audio dan ratusan epoch untuk belajar membaca teks secara teratur.
-   - Dengan **Guided Attention Loss**, model langsung mengunci penjajaran vokal secara diagonal sejak epoch awal (10–30 epoch sudah konvergen!).
-3. **CPU-First Griffin-Lim Vocoder**:
-   - Sintesis audio mel-ke-gelombang suara berjalan **2x lebih cepat dari real-time** (Real-Time Factor: **~0.53x** di CPU Celeron).
-   - Kalimat 4 detik selesai diproses hanya dalam ~2 detik!
-4. **Tanpa Ketergantungan Eksternal yang Berat**:
-   - Tidak memerlukan CUDA, C++ Build Tools, atau software pihak ketiga yang rumit.
+Arsitektur ini dirancang khusus menggunakan **PyTorch & Python** dengan arsitektur **Non-Autoregressive (Duration-Based FastVoice)** agar:
+1. **Suara Jernih & Berbicara Jelas**: Setiap huruf dan kata diucapkan secara berurutan dan teratur (bebas dari masalah *attention collapse* atau suara robot yang macet/looping).
+2. **Sangat Ringan**: Ukuran model hanya **~3.4 MB**, ramah memori RAM dan CPU laptop low-spec.
+3. **Fleksibel**: Dapat dilatih dan dijalankan langsung di laptop Celeron, atau dilatih super cepat di **Google Colab** secara gratis dan aman.
 
 ---
 
-## 📁 Struktur Direktori
+## ⚡ Panduan Melatih Model di Google Colab (Paling Cepat & Aman)
+
+Melatih model di Google Colab sangat disarankan karena menggunakan server cloud Google (bebas dari risiko banned dan tidak membebani prosesor laptop Anda). Pelatihan 80 epoch selesai hanya dalam **~1-2 menit**!
+
+### Langkah 1: Buka Google Colab
+Klik tombol di bawah ini untuk membuka notebook pelatihan langsung di browser Anda:
+
+👉 [![Open In Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/sunandar3221/MyVoice/blob/master/Train_CelerVoice_Colab.ipynb)
+
+*(Atau buka URL: https://colab.research.google.com/github/sunandar3221/MyVoice/blob/master/Train_CelerVoice_Colab.ipynb)*
+
+### Langkah 2: Jalankan Semua Sel Pelatihan
+1. Pada menu navigasi di atas notebook Colab, klik **Runtime** lalu pilih **Run all** (atau tekan tombol `Ctrl + F9`).
+2. Google Colab akan secara otomatis:
+   * Mengunduh kode repositori `sunandar3221/MyVoice`.
+   * Memasang library yang diperlukan (`torch`, `numpy`, `scipy`).
+   * Membaca 15 rekaman sampel suara vokal manusia asli bahasa Indonesia yang ada di folder `dataset/`.
+   * Melatih neural network CelerVoice v2 selama 80 epoch di cloud.
+
+### Langkah 3: Dengarkan Hasil Suara di Colab
+* Pada **Sel 4**, terdapat pemutar audio interaktif (`IPython.display.Audio`).
+* Anda bisa mengetik teks kalimat bahasa Indonesia apa saja, lalu klik tombol Play untuk mendengarkan hasil suara vokal AI Anda secara langsung di browser.
+
+### Langkah 4: Unduh dan Pasang Model di Laptop Anda
+* Pada **Sel 5**, file model hasil latihan (`best_model.pt`) akan otomatis terunduh ke komputer Anda.
+* Pindahkan file `best_model.pt` tersebut ke dalam folder:
+  ```text
+  MyVoice/checkpoints/best_model.pt
+  ```
+* Sekarang model AI suara Anda sudah siap dijalankan di laptop secara offline tanpa internet!
+
+---
+
+## 💻 Cara Menjalankan di Komputer / Laptop Lokal (Celeron)
+
+### 1. Menggunakan Antarmuka Desktop (GUI)
+Jalankan perintah ini di PowerShell atau Command Prompt:
+```bash
+python gui.py
+```
+Aplikasi grafis modern akan terbuka dengan 3 tab:
+* **Tab 1 (Uji Suara / TTS)**: Ketik teks apapun lalu klik **"Sintesis & Putar Suara"** untuk mendengarkan AI berbicara melalui speaker/headset laptop.
+* **Tab 2 (Rekam Suara Sendiri)**: Rekam kalimat-kalimat yang disediakan mikrofon untuk membuat dataset suara vokal Anda sendiri.
+* **Tab 3 (Latih Model AI)**: Melatih model langsung di CPU laptop Anda dengan progress bar live.
+
+---
+
+### 2. Menggunakan Terminal (CLI)
+
+#### A. Sintesis Suara dari Teks (Inference)
+```bash
+python infer.py --text "halo selamat datang di sistem kecerdasan buatan suara buatan sendiri" --output hasil.wav
+```
+*Audio akan otomatis disintesis dalam hitungan detik dan langsung berbunyi di speaker laptop Anda.*
+
+#### B. Merekam Suara Anda Sendiri
+Jika ingin AI menirukan karakter vokal asli Anda:
+```bash
+python record_voice.py
+```
+*Ikuti petunjuk di layar, tekan ENTER dan ucapkan kalimat yang muncul ke mikrofon Anda.*
+
+#### C. Melatih Model di Laptop Lokal
+```bash
+python train.py --epochs 60 --batch_size 4
+```
+
+---
+
+## 📁 Struktur Direktori Repositori
 
 ```text
 MyVoice/
+├── Train_CelerVoice_Colab.ipynb # Notebook Google Colab resmi (1-klik training cloud)
 ├── celer_voice/
 │   ├── __init__.py
-│   ├── audio.py          # DSP Audio, Mel-filterbank, STFT, Vocoder Griffin-Lim & De-emphasis
-│   ├── text.py           # Normalisasi teks Bahasa Indonesia & Tokenizer Karakter
-│   ├── model.py          # Arsitektur Neural Network CelerVoice (Encoder, Attention, Decoder, PostNet)
-│   ├── dataset.py        # DataLoader cerdas dengan Dynamic Padding
-│   ├── trainer.py        # Mesin pelatihan CPU khusus Celeron dengan Guided Attention
-│   └── synthesizer.py    # Pipeline sintesis teks -> spektrogram -> audio WAV
+│   ├── audio.py                 # DSP Audio, Mel-filterbank, STFT, Vocoder Griffin-Lim & Stereo Playback
+│   ├── text.py                  # Normalisasi teks Bahasa Indonesia & Tokenizer Karakter
+│   ├── model.py                 # Arsitektur Neural Non-Autoregressive CelerVoice v2
+│   ├── dataset.py               # DataLoader cerdas dengan Dynamic Padding
+│   ├── trainer.py               # Mesin pelatihan CPU khusus Celeron
+│   └── synthesizer.py           # Pipeline sintesis teks -> spektrogram -> audio WAV
 ├── dataset/
-│   ├── wavs/             # Folder file rekaman suara (.wav)
-│   └── metadata.csv      # Daftar pasangan file suara dan transkrip teks
-├── checkpoints/          # Tempat penyimpanan model terbaik (.pt)
-├── gui.py                # Aplikasi Desktop GUI modern (CustomTkinter)
-├── record_voice.py       # Perekam suara interaktif dengan mikrofon
-├── prepare_sample_data.py# Generator data akustik bawaan untuk pengujian instan
-├── train.py              # Skrip CLI untuk melatih model
-├── infer.py              # Skrip CLI untuk menghasilkan suara dari teks
+│   ├── wavs/                    # File sampel audio vokal manusia (.wav)
+│   └── metadata.csv             # Pasangan nama file audio dan transkrip teks
+├── checkpoints/                 # Tempat penyimpanan model terbaik (best_model.pt)
+├── gui.py                       # Aplikasi Desktop GUI modern (CustomTkinter)
+├── record_voice.py              # Alat perekam suara interaktif dengan mikrofon
+├── prepare_sample_data.py       # Generator sampel dataset suara manusia asli
+├── train.py                     # Skrip CLI untuk melatih model
+├── infer.py                     # Skrip CLI untuk sintesis suara
+├── requirements.txt             # Daftar dependensi Python
 └── README.md
 ```
 
 ---
 
-## 🚀 Panduan Penggunaan
-
-### 1. Menjalankan Melalui Tampilan Grafis (GUI)
-Cara paling mudah dan interaktif adalah membuka aplikasi desktop:
-```bash
-python gui.py
-```
-Di dalam GUI tersedia 3 tab:
-- **Tab 1 (Uji Suara / TTS)**: Ketik teks apapun lalu klik **"Sintesis & Putar Suara"**.
-- **Tab 2 (Rekam Suara Sendiri)**: Rekam kalimat-kalimat yang disediakan mikrofon Anda untuk membuat dataset suara sendiri.
-- **Tab 3 (Latih Model AI)**: Atur jumlah epoch dan klik **"Mulai Pelatihan Model"** dengan indikator progress bar langsung.
-
----
-
-### 2. Menjalankan Melalui Terminal (CLI)
-
-#### Langkah A: Menyiapkan Data Suara Anda Sendiri
-Gunakan skrip perekam suara interaktif:
-```bash
-python record_voice.py
-```
-Skrip akan menampilkan kalimat bahasa Indonesia. Tekan `ENTER`, bacakan kalimatnya dengan jelas ke mikrofon Anda. Rekaman otomatis disimpan dan dipotong keheningannya.
-
-*(Catatan: Anda juga bisa menggunakan data sampel bawaan dengan menjalankan `python prepare_sample_data.py`)*
-
-#### Langkah B: Melatih Model AI (Training di Celeron)
-Jalankan pelatihan model AI Anda:
-```bash
-python train.py --epochs 30 --batch_size 4
-```
-Parameter yang bisa disesuaikan:
-- `--epochs`: Jumlah putaran latihan (disarankan 30 - 50 epoch untuk hasil optimal).
-- `--batch_size`: Ukuran batch (default 4, sangat pas untuk memori Celeron).
-- `--threads`: Jumlah core/thread CPU yang dipakai (default 2).
-
-Model terbaik akan otomatis disimpan di: `checkpoints/best_model.pt`.
-
-#### Langkah C: Sintesis Suara dari Teks (Inference)
-Ketik teks apa saja yang ingin diucapkan oleh AI Anda:
-```bash
-python infer.py --text "halo nama saya adalah kecerdasan buatan buatan sendiri" --output hasil_suara.wav
-```
-Audio akan otomatis diputar langsung ke speaker laptop Anda!
-
----
-
-## 🔬 Spesifikasi Arsitektur Neural CelerVoice
+## 🔬 Spesifikasi Arsitektur Neural CelerVoice v2
 
 | Komponen | Arsitektur | Rincian |
 | :--- | :--- | :--- |
-| **Input** | Karakter / Grapheme Tokenizer | 32 karakter + kontrol token |
-| **Encoder** | 1D-CNN + Bi-GRU | Embedding 128-d, 3 lapis Conv1D (kernel 5), Bi-GRU 128-d |
-| **Attention** | Location-Sensitive Additive | Menggunakan konvolusi riwayat alignment untuk mencegah stutter/skip |
-| **Decoder** | PreNet + Stacked GRU | PreNet 2 lapis linear (128-d) dengan dropout regulasi + GRU decoder |
-| **PostNet** | 5-Layer Residual Conv1D | Menajamkan forman vokal dan membuang artefak frekuensi tinggi |
-| **Vocoder** | Phase Inversion Griffin-Lim | Zero parameter (0 MB), bebas latensi, dioptimasi Hann-window STFT |
-| **Total Parameter**| **890.818 parameter** | **~3.4 MB** |
+| **Model Type** | Non-Autoregressive Feed-Forward | Bebas looping / bebas attention collapse |
+| **Input** | Grapheme/Character Tokenizer | 32 karakter fonetik bahasa Indonesia |
+| **Text Encoder** | 1D-ResNet + Bi-GRU | 3 blok Conv1D residual (128-d) + Bi-GRU (128-d) |
+| **Duration Predictor** | 2-Layer 1D Convolution | Memprediksi panjang frame tiap huruf secara presisi |
+| **Length Regulator** | Monotonic Sequence Expansion | Meregangkan representasi fonem sesuai durasi |
+| **Mel Decoder** | 4-Layer 1D-ResNet Blocks | Memproyeksikan representasi fonem ke spektrogram Mel 80-channel |
+| **PostNet** | 3-Layer Residual Conv1D | Menajamkan forman vokal dan membuang distorsi |
+| **Vocoder** | Phase Inversion Griffin-Lim | Zero latency, dioptimasi tanpa DC offset, audio jernih |
+| **Ukuran Model** | **~890.000 parameter** | **~3.4 MB** (Sangat ringan untuk prosesor Intel Celeron) |
