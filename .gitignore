@@ -1,0 +1,10 @@
+__pycache__/
+*.py[cod]
+*$py.class
+*.log
+.vscode/
+.idea/
+output.wav
+test_speech.wav
+test_fixed.wav
+clean_voice.wav
