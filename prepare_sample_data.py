@@ -53,7 +53,7 @@ async def generate_human_dataset(output_dir: str = "dataset"):
         if os.path.exists(temp_mp3):
             os.remove(temp_mp3)
 
-        rel_path = os.path.join("wavs", filename)
+        rel_path = f"wavs/{filename}"
         rows.append((rel_path, text))
         print(f"  [+] Suara manusia tersimpan: {rel_path} -> \"{text}\"")
 

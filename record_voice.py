@@ -83,8 +83,8 @@ def main():
     for i, sentence in enumerate(PROMPT_SENTENCES):
         idx = start_idx + i
         filename = f"user_{idx:03d}.wav"
-        rel_wav_path = os.path.join("wavs", filename)
-        abs_wav_path = os.path.join("dataset", rel_wav_path)
+        rel_wav_path = f"wavs/{filename}"
+        abs_wav_path = os.path.join("dataset", "wavs", filename)
 
         print("-" * 65)
         print(f"Kalimat [{i+1}/{len(PROMPT_SENTENCES)}]:")

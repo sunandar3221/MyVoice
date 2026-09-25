@@ -32,16 +32,26 @@ class VoiceDataset(Dataset):
             for row in reader:
                 if len(row) < 2:
                     continue
-                wav_rel = row[0].strip()
+                wav_rel = row[0].strip().replace('\\', '/')
                 text = row[1].strip()
                 
-                # Check absolute or relative path
-                if os.path.isabs(wav_rel):
+                # Check absolute or relative path with cross-platform normalization
+                if os.path.isabs(wav_rel) and os.path.exists(wav_rel):
                     wav_path = wav_rel
                 else:
-                    wav_path = os.path.join(data_dir, wav_rel)
-                    
-                if os.path.exists(wav_path):
+                    candidates = [
+                        os.path.join(data_dir, wav_rel),
+                        os.path.join(data_dir, "wavs", os.path.basename(wav_rel)),
+                        os.path.join("dataset", "wavs", os.path.basename(wav_rel)),
+                        wav_rel
+                    ]
+                    wav_path = None
+                    for c in candidates:
+                        if os.path.exists(c):
+                            wav_path = c
+                            break
+                            
+                if wav_path and os.path.exists(wav_path):
                     self.items.append((wav_path, text))
                     
         print(f"Loaded {len(self.items)} audio-text pairs from {metadata_path}")

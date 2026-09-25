@@ -164,7 +164,7 @@ class CelerVoiceApp(ctk.CTk):
             os.makedirs(wavs_dir, exist_ok=True)
             filename = f"user_{self.current_prompt_idx+1:03d}.wav"
             abs_path = os.path.join(wavs_dir, filename)
-            rel_path = os.path.join("wavs", filename)
+            rel_path = f"wavs/{filename}"
 
             save_audio(abs_path, trimmed, sr=SAMPLE_RATE)
             self.last_recorded_path = abs_path
