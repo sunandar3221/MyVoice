@@ -7,9 +7,7 @@ import math
 import os
 import numpy as np
 import scipy.io.wavfile as wavfile
-import sounddevice as sd
 import torch
-import winsound
 
 SAMPLE_RATE = 16000
 N_FFT = 512
@@ -100,7 +98,7 @@ def save_audio(path: str, wav: np.ndarray, sr: int = SAMPLE_RATE):
 def play_audio(wav_or_path, sr: int = SAMPLE_RATE):
     """
     Play audio through default speakers with stereo duplication and fallback.
-    Ensures clear sound on any laptop speaker / headphone configuration.
+    Safely handles Windows, Linux (Google Colab), and headless environments.
     """
     if isinstance(wav_or_path, str):
         if not os.path.exists(wav_or_path):
@@ -113,27 +111,31 @@ def play_audio(wav_or_path, sr: int = SAMPLE_RATE):
         wav = wav_or_path
         abs_path = None
 
+    if wav is None:
+        return
+
     if wav.ndim == 1:
-        # Duplicate mono to stereo (N, 2) for multi-channel compatibility
         stereo_wav = np.column_stack([wav, wav])
     else:
         stereo_wav = wav
 
-    played = False
+    # 1. Try sounddevice if installed
     try:
+        import sounddevice as sd
         sd.play(stereo_wav, samplerate=sr)
         sd.wait()
-        played = True
-    except Exception as e:
-        print(f"sounddevice playback notice: {e}")
+        return
+    except Exception:
+        pass
 
-    # Fallback to winsound if sounddevice did not complete
-    if not played and abs_path and os.path.exists(abs_path):
+    # 2. Try winsound if on Windows
+    if abs_path and os.path.exists(abs_path):
         try:
+            import winsound
             winsound.PlaySound(abs_path, winsound.SND_FILENAME)
-            played = True
-        except Exception as e:
-            print(f"winsound playback notice: {e}")
+            return
+        except Exception:
+            pass
 
 
 def wav_to_mel(wav: np.ndarray) -> torch.Tensor:
