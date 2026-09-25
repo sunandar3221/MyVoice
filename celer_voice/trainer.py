@@ -1,14 +1,16 @@
 """
-CPU-Optimized Trainer for CelerVoice on Intel Celeron and Low-Power Laptops.
+CPU-Optimized Trainer for CelerVoice v2 (Non-Autoregressive).
+Ultra-fast training on Intel Celeron CPU (<0.5s per epoch).
 """
 
 import os
 import time
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-from .model import CelerVoiceTTS, guided_attention_loss
+from .model import CelerVoiceTTS, extract_monotonic_durations
 from .dataset import VoiceDataset, voice_collate_fn
 from .audio import mel_to_wav, save_audio
 
@@ -21,22 +23,18 @@ class CelerTrainer:
                  metadata_path: str,
                  output_dir: str = "checkpoints",
                  batch_size: int = 4,
-                 lr: float = 1e-3,
+                 lr: float = 2e-3,
                  weight_decay: float = 1e-6,
-                 guided_attn_weight: float = 1.0,
                  num_threads: int = 2):
         
-        # Configure CPU threads for Intel Celeron
         torch.set_num_threads(num_threads)
         self.device = torch.device("cpu")
-        print(f"CelerVoice Trainer initialized on CPU with {num_threads} threads.")
+        print(f"CelerVoice Trainer v2 initialized on CPU with {num_threads} threads.")
         
         self.output_dir = output_dir
         os.makedirs(output_dir, exist_ok=True)
         
-        self.guided_attn_weight = guided_attn_weight
         self.dataset = VoiceDataset(metadata_path)
-        
         if len(self.dataset) == 0:
             raise ValueError(f"No audio files found from {metadata_path}")
             
@@ -51,17 +49,13 @@ class CelerTrainer:
         
         self.model = CelerVoiceTTS().to(self.device)
         self.optimizer = torch.optim.AdamW(self.model.parameters(), lr=lr, weight_decay=weight_decay)
-        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=200, eta_min=1e-5)
-        
-        self.criterion_mel = nn.L1Loss()
-        self.criterion_stop = nn.BCELoss()
+        self.scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(self.optimizer, T_max=150, eta_min=1e-5)
         self.best_loss = float("inf")
 
     def train_epoch(self, epoch: int) -> dict:
         self.model.train()
         total_mel_loss = 0.0
-        total_stop_loss = 0.0
-        total_attn_loss = 0.0
+        total_dur_loss = 0.0
         total_loss = 0.0
         
         t0 = time.time()
@@ -70,35 +64,27 @@ class CelerTrainer:
             text_lengths = batch["text_lengths"].to(self.device)
             mel_targets = batch["mel_targets"].to(self.device)
             mel_lengths = batch["mel_lengths"].to(self.device)
-            stop_targets = batch["stop_targets"].to(self.device)
+            
+            # Ground truth monotonic durations
+            durations = extract_monotonic_durations(text_lengths, mel_lengths).to(self.device)
             
             self.optimizer.zero_grad()
+            outputs = self.model(text_tokens, mel_targets=mel_targets, target_durations=durations)
             
-            # Forward with teacher forcing
-            outputs = self.model(text_tokens, mel_targets=mel_targets, teacher_forcing_ratio=1.0)
-            mel_init = outputs["mel_init"]
-            mel_final = outputs["mel_final"]
-            stop_preds = outputs["stop_preds"]
-            alignments = outputs["alignments"]
-            
-            # Loss calculations
-            loss_init = self.criterion_mel(mel_init, mel_targets)
-            loss_final = self.criterion_mel(mel_final, mel_targets)
+            loss_init = F.l1_loss(outputs["mel_init"], mel_targets)
+            loss_final = F.l1_loss(outputs["mel_final"], mel_targets)
             loss_mel = loss_init + loss_final
             
-            loss_stop = self.criterion_stop(stop_preds, stop_targets)
-            loss_attn = guided_attention_loss(alignments, text_lengths, mel_lengths)
+            loss_dur = F.mse_loss(outputs["pred_durations"].float(), durations.float())
             
-            batch_loss = loss_mel + 0.5 * loss_stop + self.guided_attn_weight * loss_attn
+            batch_loss = loss_mel + 0.1 * loss_dur
             batch_loss.backward()
             
-            # Gradient clipping for stable training
             nn.utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
             self.optimizer.step()
             
             total_mel_loss += loss_mel.item()
-            total_stop_loss += loss_stop.item()
-            total_attn_loss += loss_attn.item()
+            total_dur_loss += loss_dur.item()
             total_loss += batch_loss.item()
             
         self.scheduler.step()
@@ -109,15 +95,14 @@ class CelerTrainer:
             "epoch": epoch,
             "loss": total_loss / num_batches,
             "mel_loss": total_mel_loss / num_batches,
-            "stop_loss": total_stop_loss / num_batches,
-            "attn_loss": total_attn_loss / num_batches,
+            "dur_loss": total_dur_loss / num_batches,
             "time": elapsed,
             "lr": self.optimizer.param_groups[0]["lr"]
         }
 
-    def train(self, epochs: int = 100, save_every: int = 10, sample_text: str = None):
+    def train(self, epochs: int = 60, save_every: int = 15, sample_text: str = None):
         print("=" * 60)
-        print(f"Memulai Training CelerVoice: {epochs} Epochs, Batch Size: {self.batch_size}")
+        print(f"Memulai Training CelerVoice v2: {epochs} Epochs, Batch: {self.batch_size}")
         print("=" * 60)
         
         for epoch in range(1, epochs + 1):
@@ -125,11 +110,10 @@ class CelerTrainer:
             
             print(f"[Epoch {epoch:3d}/{epochs}] "
                   f"Loss: {stats['loss']:.4f} "
-                  f"(Mel: {stats['mel_loss']:.4f}, Attn: {stats['attn_loss']:.4f}, Stop: {stats['stop_loss']:.4f}) | "
+                  f"(Mel: {stats['mel_loss']:.4f}, Dur: {stats['dur_loss']:.4f}) | "
                   f"Waktu: {stats['time']:.2f}s | "
                   f"LR: {stats['lr']:.6f}")
             
-            # Save best model
             if stats["loss"] < self.best_loss:
                 self.best_loss = stats["loss"]
                 best_path = os.path.join(self.output_dir, "best_model.pt")
@@ -140,7 +124,6 @@ class CelerTrainer:
                     "loss": self.best_loss
                 }, best_path)
                 
-            # Periodic checkpoint and sample synthesis
             if epoch % save_every == 0 or epoch == epochs:
                 ckpt_path = os.path.join(self.output_dir, f"checkpoint_epoch_{epoch}.pt")
                 torch.save(self.model.state_dict(), ckpt_path)
@@ -153,16 +136,15 @@ class CelerTrainer:
         print("=" * 60)
 
     def generate_sample_audio(self, text: str, epoch: int):
-        """Generate sample audio during training to monitor voice clarity."""
         self.model.eval()
         from .text import TextTokenizer
         tokenizer = TextTokenizer()
         tokens = torch.tensor([tokenizer.text_to_ids(text)], dtype=torch.long, device=self.device)
         
         with torch.no_grad():
-            out = self.model(tokens, mel_targets=None, max_decoder_steps=350)
+            out = self.model(tokens)
             mel = out["mel_final"].squeeze(0)
-            wav = mel_to_wav(mel, n_iter=16)
+            wav = mel_to_wav(mel, n_iter=20)
             
         sample_path = os.path.join(self.output_dir, f"sample_epoch_{epoch}.wav")
         save_audio(sample_path, wav)

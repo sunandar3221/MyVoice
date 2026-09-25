@@ -1,5 +1,5 @@
 """
-Inference engine and speech synthesizer for CelerVoice.
+Inference engine and speech synthesizer for CelerVoice v2 (Non-Autoregressive).
 Converts text into natural audio waveform completely on CPU.
 """
 
@@ -37,9 +37,9 @@ class Synthesizer:
             
         self.model.eval()
 
-    def synthesize(self, text: str, max_steps: int = 500, vocoder_iters: int = 24) -> tuple[np.ndarray, dict]:
+    def synthesize(self, text: str, pace: float = 1.0, vocoder_iters: int = 24) -> tuple[np.ndarray, dict]:
         """
-        Synthesize text to audio waveform.
+        Synthesize text to audio waveform in a single forward pass.
         Returns: (audio_waveform, metadata)
         """
         t0 = time.time()
@@ -47,7 +47,7 @@ class Synthesizer:
         token_tensor = torch.tensor([tokens], dtype=torch.long, device=self.device)
         
         with torch.no_grad():
-            outputs = self.model(token_tensor, mel_targets=None, max_decoder_steps=max_steps)
+            outputs = self.model(token_tensor, pace=pace)
             mel_final = outputs["mel_final"].squeeze(0)  # [n_mels, frames]
             
         t_model = time.time() - t0
@@ -59,7 +59,7 @@ class Synthesizer:
         
         total_time = t_model + t_vocoder
         audio_duration = len(wav) / SAMPLE_RATE
-        rtf = total_time / max(audio_duration, 1e-4)  # Real-Time Factor (<1.0 means faster than real-time!)
+        rtf = total_time / max(audio_duration, 1e-4)
         
         info = {
             "model_time": t_model,
@@ -68,15 +68,15 @@ class Synthesizer:
             "audio_duration": audio_duration,
             "rtf": rtf,
             "frames": mel_final.size(1),
-            "alignments": outputs["alignments"].squeeze(0).cpu().numpy()
+            "durations": outputs["durations"].squeeze(0).cpu().numpy()
         }
         return wav, info
 
-    def speak(self, text: str, output_path: str = "output.wav", play: bool = True, vocoder_iters: int = 24) -> str:
+    def speak(self, text: str, output_path: str = "output.wav", play: bool = True, pace: float = 1.0, vocoder_iters: int = 24) -> str:
         """
         Synthesize text, save to WAV, and play through speakers.
         """
-        wav, info = self.synthesize(text, vocoder_iters=vocoder_iters)
+        wav, info = self.synthesize(text, pace=pace, vocoder_iters=vocoder_iters)
         save_audio(output_path, wav, sr=SAMPLE_RATE)
         print(f"Generated {info['audio_duration']:.2f}s audio in {info['total_time']:.2f}s (RTF: {info['rtf']:.2f}x) -> {output_path}")
         

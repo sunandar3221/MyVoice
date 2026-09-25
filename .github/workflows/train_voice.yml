@@ -6,22 +6,22 @@ on:
       epochs:
         description: 'Jumlah Epoch Pelatihan'
         required: true
-        default: '60'
+        default: '80'
         type: string
       batch_size:
         description: 'Batch Size'
         required: true
-        default: '8'
+        default: '4'
         type: string
       learning_rate:
         description: 'Learning Rate'
         required: true
-        default: '0.001'
+        default: '0.002'
         type: string
   push:
-    paths:
-      - 'dataset/**'
-      - '.github/workflows/train_voice.yml'
+    branches:
+      - master
+      - main
 
 jobs:
   train-ai:
@@ -42,26 +42,17 @@ jobs:
           python -m pip install --upgrade pip
           pip install torch numpy scipy
 
-      - name: 📁 Periksa Dataset
+      - name: 🚀 Latih Model AI CelerVoice v2
         run: |
-          if [ ! -f "dataset/metadata.csv" ]; then
-            echo "Dataset belum ditemukan, membuat sample akustik awal..."
-            python prepare_sample_data.py
-          else
-            echo "Dataset terdeteksi! Siap melatih dengan suara pengguna."
-          fi
-
-      - name: 🚀 Latih Model AI CelerVoice
-        run: |
-          EPOCHS="${{ github.event.inputs.epochs || '60' }}"
-          BATCH="${{ github.event.inputs.batch_size || '8' }}"
-          LR="${{ github.event.inputs.learning_rate || '0.001' }}"
-          echo "Memulai training dengan $EPOCHS epoch, batch size $BATCH, threads 4..."
+          EPOCHS="${{ github.event.inputs.epochs || '80' }}"
+          BATCH="${{ github.event.inputs.batch_size || '4' }}"
+          LR="${{ github.event.inputs.learning_rate || '0.002' }}"
+          echo "Memulai training di cloud GitHub Actions: $EPOCHS epoch, batch size $BATCH, threads 4..."
           python train.py --epochs $EPOCHS --batch_size $BATCH --lr $LR --threads 4
 
       - name: 🎙️ Uji Coba Sintesis Suara Hasil Training
         run: |
-          python infer.py --text "halo ini adalah model suara kecerdasan buatan buatan sendiri yang dilatih di github actions" --output test_cloud_eval.wav --no_play
+          python infer.py --text "halo selamat datang di sistem kecerdasan buatan suara buatan sendiri" --output test_cloud_eval.wav --no_play
 
       - name: 📤 Upload Model Checkpoint (.pt) & Audio Sampel
         uses: actions/upload-artifact@v4
