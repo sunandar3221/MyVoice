@@ -186,24 +186,49 @@ class CelerVoiceTTS(nn.Module):
         }
 
 
-def extract_monotonic_durations(text_lens: torch.Tensor, mel_lens: torch.Tensor) -> torch.Tensor:
+def extract_phonetic_durations(text_tokens: torch.Tensor, text_lens: torch.Tensor, mel_lens: torch.Tensor) -> torch.Tensor:
     """
-    Compute duration targets using Monotonic Length Distribution.
-    Each character gets a natural proportional share of frames.
+    Compute natural duration targets weighted by human phonetic timing.
+    Vowels and pauses get more duration, consonants get concise punchy timing.
     """
+    from .text import ID_TO_CHAR
+    vowels = set("aiueo")
     batch_size = text_lens.size(0)
     max_text_len = text_lens.max().item()
-    durations = torch.zeros(batch_size, max_text_len, dtype=torch.long)
+    durations = torch.zeros(batch_size, max_text_len, dtype=torch.long, device=text_tokens.device)
     
     for b in range(batch_size):
         n = text_lens[b].item()
         t = mel_lens[b].item()
         if n == 0 or t == 0:
             continue
-        base = t // n
-        rem = t % n
-        d = torch.full((n,), base, dtype=torch.long)
-        d[:rem] += 1
-        durations[b, :n] = d
+            
+        weights = []
+        for idx in range(n):
+            token_id = text_tokens[b, idx].item()
+            ch = ID_TO_CHAR.get(token_id, '')
+            if ch in vowels:
+                weights.append(2.6)
+            elif ch == ' ':
+                weights.append(3.2)
+            elif ch in '.,!?':
+                weights.append(4.0)
+            else:
+                weights.append(1.0)
+                
+        total_weight = sum(weights)
+        raw_durs = [max(1, int(round(w / total_weight * t))) for w in weights]
+        
+        diff = t - sum(raw_durs)
+        if diff > 0:
+            for i in range(diff):
+                raw_durs[i % n] += 1
+        elif diff < 0:
+            for i in range(-diff):
+                idx_to_dec = (n - 1 - i) % n
+                if raw_durs[idx_to_dec] > 1:
+                    raw_durs[idx_to_dec] -= 1
+                    
+        durations[b, :n] = torch.tensor(raw_durs, dtype=torch.long, device=text_tokens.device)
         
     return durations

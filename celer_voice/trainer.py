@@ -10,7 +10,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import DataLoader
 
-from .model import CelerVoiceTTS, extract_monotonic_durations
+from .model import CelerVoiceTTS, extract_phonetic_durations
 from .dataset import VoiceDataset, voice_collate_fn
 from .audio import mel_to_wav, save_audio
 
@@ -65,8 +65,8 @@ class CelerTrainer:
             mel_targets = batch["mel_targets"].to(self.device)
             mel_lengths = batch["mel_lengths"].to(self.device)
             
-            # Ground truth monotonic durations
-            durations = extract_monotonic_durations(text_lengths, mel_lengths).to(self.device)
+            # Ground truth phonetic durations
+            durations = extract_phonetic_durations(text_tokens, text_lengths, mel_lengths).to(self.device)
             
             self.optimizer.zero_grad()
             outputs = self.model(text_tokens, mel_targets=mel_targets, target_durations=durations)

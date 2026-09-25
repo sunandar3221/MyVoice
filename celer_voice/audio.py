@@ -181,10 +181,20 @@ def mel_to_wav(log_mel: torch.Tensor, n_iter: int = 24) -> np.ndarray:
     # Suppress DC frequency bin and lowest sub-bass (<60Hz) to prevent clicks
     linear_mag[:2, :] = 0.0
     
-    window = torch.hann_window(WIN_LENGTH)
-    angles = torch.exp(2j * np.pi * torch.rand(linear_mag.shape))
-    spec = linear_mag.to(torch.complex64) * angles
+    # 1. Initialize phase with natural acoustic minimum-phase (Cepstral liftering)
+    # Eliminates the harsh metallic random-phase buzz of vanilla Griffin-Lim
+    log_mag = torch.log(torch.clamp(linear_mag, min=1e-5))
+    cepstrum = torch.fft.irfft(log_mag, dim=0)
+    N = cepstrum.shape[0]
+    causal_window = torch.zeros_like(cepstrum)
+    causal_window[0] = 1.0
+    causal_window[1:N // 2] = 2.0
+    causal_window[N // 2] = 1.0
     
+    min_phase_spec = torch.exp(torch.fft.rfft(cepstrum * causal_window, dim=0))
+    spec = linear_mag.to(torch.complex64) * torch.exp(1j * torch.angle(min_phase_spec))
+    
+    window = torch.hann_window(WIN_LENGTH)
     for _ in range(n_iter):
         wav = torch.istft(
             spec,
